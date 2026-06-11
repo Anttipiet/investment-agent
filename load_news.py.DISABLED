@@ -1,0 +1,251 @@
+"""
+Load news articles for tracked stocks
+Simulates news from various financial sources
+"""
+
+from models import SessionLocal, NewsArticle
+from datetime import datetime, timedelta
+import random
+
+db = SessionLocal()
+
+print("📰 Loading news articles...\n")
+
+# ============================================================================
+# NEWS DATA (Realistic financial news)
+# ============================================================================
+
+news_data = [
+    # NVDA - Recent positive news
+    {
+        'symbol': 'NVDA',
+        'title': 'NVIDIA Reports Record Quarterly Revenue Driven by AI Boom',
+        'description': 'NVIDIA exceeded analyst expectations with 126% YoY revenue growth. Data center sales surged 212% as enterprises rush to deploy AI infrastructure.',
+        'source': 'Bloomberg',
+        'sentiment': 'POSITIVE',
+        'sentiment_score': 0.85,
+        'category': 'EARNINGS',
+        'relevance': 95,
+        'days_ago': 2
+    },
+    {
+        'symbol': 'NVDA',
+        'title': 'NVIDIA CEO Jensen Huang: AI Demand Remains Insatiable',
+        'description': 'During earnings call, Huang stated demand for H100 and H200 chips continues to exceed supply. Guidance for next quarter raised 15%.',
+        'source': 'Reuters',
+        'sentiment': 'POSITIVE',
+        'sentiment_score': 0.80,
+        'category': 'EARNINGS',
+        'relevance': 90,
+        'days_ago': 2
+    },
+    {
+        'symbol': 'NVDA',
+        'title': 'Major Cloud Providers Increase GPU Orders from NVIDIA',
+        'description': 'AWS, Google Cloud, and Azure have collectively placed $5B in new orders for NVIDIA GPUs, signaling confidence in AI infrastructure buildout.',
+        'source': 'MarketWatch',
+        'sentiment': 'POSITIVE',
+        'sentiment_score': 0.75,
+        'category': 'PRODUCT',
+        'relevance': 88,
+        'days_ago': 3
+    },
+    
+    # RTX - Defense positive
+    {
+        'symbol': 'RTX',
+        'title': 'Pentagon Increases Defense Spending Amid Geopolitical Tensions',
+        'description': 'U.S. Defense Department announces $820B budget, up 5% YoY. Emphasizes support for RTX contract wins in missile systems and radar.',
+        'source': 'Reuters',
+        'sentiment': 'POSITIVE',
+        'sentiment_score': 0.82,
+        'category': 'REGULATORY',
+        'relevance': 92,
+        'days_ago': 1
+    },
+    {
+        'symbol': 'RTX',
+        'title': 'Raytheon Technologies Wins $2.3B Navy Contract',
+        'description': 'RTX subsidiary wins competitive bid for advanced missile defense system. Expected to generate $400M annual revenue.',
+        'source': 'Bloomberg',
+        'sentiment': 'POSITIVE',
+        'sentiment_score': 0.80,
+        'category': 'ACQUISITION',
+        'relevance': 94,
+        'days_ago': 2
+    },
+    
+    # BA - Aerospace challenges
+    {
+        'symbol': 'BA',
+        'title': 'Boeing Safety Crisis Deepens: FAA Grounds Production',
+        'description': 'FAA halts 737 MAX 9 production citing manufacturing defects. Investigation suggests systemic quality control issues.',
+        'source': 'CNBC',
+        'sentiment': 'NEGATIVE',
+        'sentiment_score': -0.85,
+        'category': 'REGULATORY',
+        'relevance': 96,
+        'days_ago': 1
+    },
+    {
+        'symbol': 'BA',
+        'title': 'Boeing Stock Falls 12% on Production Halt',
+        'description': 'Analysts downgrade Boeing following latest safety concerns. Production delays could cost company $2B+ in 2024.',
+        'source': 'Financial Times',
+        'sentiment': 'NEGATIVE',
+        'sentiment_score': -0.78,
+        'category': 'EARNINGS',
+        'relevance': 90,
+        'days_ago': 1
+    },
+    
+    # CVX - Energy positive
+    {
+        'symbol': 'CVX',
+        'title': 'Oil Prices Surge on Supply Concerns: Chevron Benefits',
+        'description': 'Crude oil prices hit $95/barrel as OPEC production cuts tighten supply. Energy majors expected to benefit from higher prices.',
+        'source': 'Bloomberg',
+        'sentiment': 'POSITIVE',
+        'sentiment_score': 0.72,
+        'category': 'PRODUCT',
+        'relevance': 85,
+        'days_ago': 2
+    },
+    {
+        'symbol': 'CVX',
+        'title': 'Chevron Announces $10B Share Buyback Program',
+        'description': 'Chevron authorizes new $10B buyback as cash flow remains strong. Shows confidence in long-term energy demand.',
+        'source': 'Reuters',
+        'sentiment': 'POSITIVE',
+        'sentiment_score': 0.75,
+        'category': 'EARNINGS',
+        'relevance': 88,
+        'days_ago': 3
+    },
+    
+    # UEC - Nuclear positive
+    {
+        'symbol': 'UEC',
+        'title': 'Nuclear Energy Renaissance Accelerates: Major Deals Expected',
+        'description': 'Uranium Energy Corp benefits from renewed interest in nuclear power for AI data center cooling. 20+ new reactors planned globally.',
+        'source': 'MarketWatch',
+        'sentiment': 'POSITIVE',
+        'sentiment_score': 0.80,
+        'category': 'PRODUCT',
+        'relevance': 87,
+        'days_ago': 2
+    },
+    {
+        'symbol': 'UEC',
+        'title': 'Uranium Spot Price Reaches 16-Year High',
+        'description': 'Uranium prices hit $80/lb as demand accelerates. UEC positioned as pure-play uranium beneficiary.',
+        'source': 'Bloomberg',
+        'sentiment': 'POSITIVE',
+        'sentiment_score': 0.85,
+        'category': 'PRODUCT',
+        'relevance': 92,
+        'days_ago': 1
+    },
+    
+    # MSFT - AI positive
+    {
+        'symbol': 'MSFT',
+        'title': 'Microsoft Releases Copilot Pro: AI Adoption Accelerates',
+        'description': 'New Copilot Pro features drive enterprise AI adoption. Microsoft targets $5B annual AI software revenue by 2026.',
+        'source': 'TechCrunch',
+        'sentiment': 'POSITIVE',
+        'sentiment_score': 0.78,
+        'category': 'PRODUCT',
+        'relevance': 90,
+        'days_ago': 3
+    },
+    {
+        'symbol': 'MSFT',
+        'title': 'Microsoft Beats Q4 Earnings, Cloud Revenue Soars',
+        'description': 'Azure cloud revenue grew 31% YoY, beating expectations. AI-related workloads now represent 25% of cloud usage.',
+        'source': 'Reuters',
+        'sentiment': 'POSITIVE',
+        'sentiment_score': 0.82,
+        'category': 'EARNINGS',
+        'relevance': 93,
+        'days_ago': 2
+    },
+    
+    # AMD - AI competition
+    {
+        'symbol': 'AMD',
+        'title': 'AMD Launches MI300X Chip, Challenges NVIDIA Dominance',
+        'description': 'New GPU competes directly with NVIDIA in AI inferencing. Early benchmarks show competitive performance at lower price point.',
+        'source': 'AnandTech',
+        'sentiment': 'POSITIVE',
+        'sentiment_score': 0.70,
+        'category': 'PRODUCT',
+        'relevance': 91,
+        'days_ago': 4
+    },
+    {
+        'symbol': 'AMD',
+        'title': 'Major Cloud Provider Commits to AMD Chips for AI',
+        'description': 'Alibaba selects AMD MI300X for 50,000 GPU deployment. Validates AMD as credible NVIDIA alternative.',
+        'source': 'Bloomberg',
+        'sentiment': 'POSITIVE',
+        'sentiment_score': 0.76,
+        'category': 'PRODUCT',
+        'relevance': 89,
+        'days_ago': 5
+    },
+]
+
+# ============================================================================
+# LOAD NEWS
+# ============================================================================
+
+added = 0
+for news in news_data:
+    try:
+        existing = db.query(NewsArticle).filter(
+            NewsArticle.symbol == news['symbol'],
+            NewsArticle.title == news['title']
+        ).first()
+        
+        if not existing:
+            article = NewsArticle(
+                symbol=news['symbol'],
+                title=news['title'],
+                description=news['description'],
+                url=f"https://news.example.com/{news['symbol']}/{news['title'].replace(' ', '-')}",
+                source=news['source'],
+                sentiment=news['sentiment'],
+                sentiment_score=news['sentiment_score'],
+                category=news['category'],
+                relevance_score=news['relevance'],
+                published_at=datetime.utcnow() - timedelta(days=news['days_ago'])
+            )
+            db.add(article)
+            added += 1
+            
+            emoji = "📈" if news['sentiment'] == 'POSITIVE' else "📉"
+            print(f"{emoji} {news['symbol']:6} | {news['sentiment']:8} | {news['title'][:50]}")
+    except Exception as e:
+        print(f"⚠️  Error: {str(e)[:50]}")
+
+db.commit()
+
+print(f"\n✅ Added {added} news articles\n")
+
+# ============================================================================
+# SUMMARY
+# ============================================================================
+
+from models import NewsArticle as NA
+positive = db.query(NA).filter(NA.sentiment == 'POSITIVE').count()
+negative = db.query(NA).filter(NA.sentiment == 'NEGATIVE').count()
+
+print("="*70)
+print("📰 NEWS ARTICLE SUMMARY")
+print("="*70)
+print(f"\n✅ Total Articles: {db.query(NA).count()}")
+print(f"📈 Positive: {positive}")
+print(f"📉 Negative: {negative}")
+
+db.close()

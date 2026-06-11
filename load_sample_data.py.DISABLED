@@ -1,0 +1,232 @@
+"""
+Load sample data to test the signal engine
+This creates realistic insider trades so we can generate actual signals
+"""
+
+from models import SessionLocal, InsiderTrade, AlphaPick, PriceSnapshot
+from decimal import Decimal
+from datetime import datetime, timedelta
+import yfinance as yf
+
+db = SessionLocal()
+
+print("📊 Loading real data...\n")
+
+# ============================================================================
+# 1. FETCH REAL MARKET PRICES
+# ============================================================================
+
+print("💰 Fetching real market prices...")
+
+symbols = ['NVDA', 'RTX', 'BA', 'UEC', 'MSFT', 'CVX', 'LMT']
+
+for symbol in symbols:
+    try:
+        ticker = yf.Ticker(symbol)
+        data = ticker.history(period='1y')
+        info = ticker.info
+        
+        if not data.empty:
+            price = float(data['Close'].iloc[-1])
+            volume = int(data['Volume'].iloc[-1])
+            
+            snapshot = PriceSnapshot(
+                symbol=symbol,
+                price=Decimal(str(price)),
+                volume=volume,
+                market_cap=Decimal(str(info.get('marketCap', 0))),
+                pe_ratio=info.get('trailingPE'),
+                high_52w=Decimal(str(info.get('fiftyTwoWeekHigh', 0))),
+                low_52w=Decimal(str(info.get('fiftyTwoWeekLow', 0)))
+            )
+            db.add(snapshot)
+            print(f"  ✅ {symbol}: ${price:.2f}")
+    except Exception as e:
+        print(f"  ⚠️  {symbol}: {str(e)[:50]}")
+
+db.commit()
+
+# ============================================================================
+# 2. ADD REALISTIC INSIDER TRADES (FOR TESTING)
+# ============================================================================
+
+print("\n🔍 Adding sample insider trades...\n")
+
+insider_trades = [
+    {
+        'symbol': 'NVDA',
+        'insider_name': 'Jensen Huang',
+        'insider_role': 'CEO',
+        'transaction_type': 'BUY',
+        'shares': 50000,
+        'price': 875.50,
+        'transaction_date': datetime.utcnow() - timedelta(days=2),
+        'company_name': 'NVIDIA'
+    },
+    {
+        'symbol': 'NVDA',
+        'insider_name': 'Colette Kress',
+        'insider_role': 'CFO',
+        'transaction_type': 'BUY',
+        'shares': 25000,
+        'price': 872.00,
+        'transaction_date': datetime.utcnow() - timedelta(days=2),
+        'company_name': 'NVIDIA'
+    },
+    {
+        'symbol': 'NVDA',
+        'insider_name': 'Jay Puri',
+        'insider_role': 'OFFICER',
+        'transaction_type': 'BUY',
+        'shares': 15000,
+        'price': 870.00,
+        'transaction_date': datetime.utcnow() - timedelta(days=1),
+        'company_name': 'NVIDIA'
+    },
+    {
+        'symbol': 'RTX',
+        'insider_name': 'Greg Hayes',
+        'insider_role': 'CEO',
+        'transaction_type': 'BUY',
+        'shares': 75000,
+        'price': 420.00,
+        'transaction_date': datetime.utcnow() - timedelta(days=3),
+        'company_name': 'RTX Corporation'
+    },
+    {
+        'symbol': 'BA',
+        'insider_name': 'David Calhoun',
+        'insider_role': 'CEO',
+        'transaction_type': 'SELL',
+        'shares': 100000,
+        'price': 195.00,
+        'transaction_date': datetime.utcnow() - timedelta(days=1),
+        'company_name': 'Boeing'
+    },
+    {
+        'symbol': 'UEC',
+        'insider_name': 'Amir Adnani',
+        'insider_role': 'CEO',
+        'transaction_type': 'BUY',
+        'shares': 50000,
+        'price': 5.50,
+        'transaction_date': datetime.utcnow() - timedelta(days=2),
+        'company_name': 'Uranium Energy'
+    },
+]
+
+for trade in insider_trades:
+    try:
+        existing = db.query(InsiderTrade).filter(
+            InsiderTrade.symbol == trade['symbol'],
+            InsiderTrade.insider_name == trade['insider_name'],
+            InsiderTrade.transaction_date == trade['transaction_date']
+        ).first()
+        
+        if not existing:
+            insider_trade = InsiderTrade(
+                sec_filing_id=f"{trade['symbol']}-{trade['insider_name']}-{trade['transaction_date'].date()}",
+                symbol=trade['symbol'],
+                company_name=trade['company_name'],
+                insider_name=trade['insider_name'],
+                insider_role=trade['insider_role'],
+                transaction_type=trade['transaction_type'],
+                shares=trade['shares'],
+                price=Decimal(str(trade['price'])),
+                transaction_amount=Decimal(str(trade['shares'] * trade['price'])),
+                transaction_date=trade['transaction_date'],
+                filing_date=datetime.utcnow(),
+                form_4_url='https://www.sec.gov'
+            )
+            db.add(insider_trade)
+            print(f"  ✅ {trade['insider_name']} ({trade['insider_role']}) - {trade['transaction_type']} {trade['shares']} {trade['symbol']} @ ${trade['price']}")
+    except Exception as e:
+        print(f"  ⚠️  Error: {str(e)[:50]}")
+
+db.commit()
+
+# ============================================================================
+# 3. ADD ANALYST PICKS
+# ============================================================================
+
+print("\n📈 Adding analyst picks...\n")
+
+analyst_picks = [
+    {
+        'symbol': 'NVDA',
+        'rating': 'BUY',
+        'price_target': 1000.00,
+        'analyst': 'Toni Sacconaghi',
+        'firm': 'Bernstein',
+        'reasoning': 'NVIDIA poised to benefit from AI infrastructure buildout. Strong competitive moat.'
+    },
+    {
+        'symbol': 'RTX',
+        'rating': 'BUY',
+        'price_target': 475.00,
+        'analyst': 'Robert Spingarn',
+        'firm': 'Credit Suisse',
+        'reasoning': 'Defense spending elevated. RTX well-positioned for long-term growth.'
+    },
+    {
+        'symbol': 'BA',
+        'rating': 'HOLD',
+        'price_target': 210.00,
+        'analyst': 'Doug Harley',
+        'firm': 'Bernstein',
+        'reasoning': 'Boeing recovery in progress but regulatory risks remain.'
+    },
+    {
+        'symbol': 'UEC',
+        'rating': 'BUY',
+        'price_target': 8.50,
+        'analyst': 'Nuclear Analyst',
+        'firm': 'Evercore ISI',
+        'reasoning': 'Nuclear energy renaissance. Long-term uranium demand tailwind.'
+    },
+]
+
+for pick in analyst_picks:
+    try:
+        existing = db.query(AlphaPick).filter(
+            AlphaPick.symbol == pick['symbol'],
+            AlphaPick.analyst == pick['analyst']
+        ).first()
+        
+        if not existing:
+            alpha_pick = AlphaPick(
+                symbol=pick['symbol'],
+                rating=pick['rating'],
+                price_target=Decimal(str(pick['price_target'])),
+                analyst_name=pick['analyst'],
+                firm=pick['firm'],
+                date=datetime.utcnow(),
+                reasoning=pick['reasoning'],
+                confidence=0.75
+            )
+            db.add(alpha_pick)
+            print(f"  ✅ {pick['symbol']}: {pick['rating']} - Target ${pick['price_target']} ({pick['analyst']})")
+    except Exception as e:
+        print(f"  ⚠️  Error: {str(e)[:50]}")
+
+db.commit()
+
+# ============================================================================
+# DONE
+# ============================================================================
+
+print("\n" + "="*50)
+print("✅ SAMPLE DATA LOADED SUCCESSFULLY!")
+print("="*50)
+print(f"\n📊 Data Summary:")
+
+insider_count = db.query(InsiderTrade).count()
+price_count = db.query(PriceSnapshot).count()
+picks_count = db.query(AlphaPick).count()
+
+print(f"  • Insider Trades: {insider_count}")
+print(f"  • Price Snapshots: {price_count}")
+print(f"  • Analyst Picks: {picks_count}")
+print(f"\n🚀 Now generate signals with real data!")
+
+db.close()
